@@ -11,6 +11,7 @@
 
 bool done = false;
 QApplication *app;
+QWebPage *page;
 GLuint tex;
 
 #define __unused __attribute__((unused))
@@ -41,13 +42,18 @@ void init(void) {
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, WIDTH, HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 }
+
+int wnd_w;
+int wnd_h;
 
 void reshape(int w, int h) {
     printf("reshape %dx%d\n", w, h);
     glViewport(0, 0, w, h);
+    wnd_w = w;
+    wnd_h = h;
 }
 
 void draw(void) {
@@ -79,6 +85,47 @@ void draw(void) {
     }
 }
 
+bool isdown = false;
+void mouse(int button, int state, int x, int y) {
+    // first, get the coords converted into the space
+    // expected by the browser
+
+    float wx = ((float)x - wnd_w/4) / (wnd_w/2);
+    float wy = ((float)y - wnd_h/4) / (wnd_h/2);
+
+    QPoint pt(WIDTH * wx, HEIGHT * wy);
+
+    printf("ev %d %d %d %d [%d %d]\n",
+            button, state, x, y, pt.x(), pt.y());
+    QMouseEvent ev(
+        state == GLUT_DOWN ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease,
+        pt, pt /* global */,
+        Qt::LeftButton, QFlags<Qt::MouseButton>(Qt::LeftButton),
+        Qt::NoModifier);
+
+    page->event(&ev);
+
+    isdown = state == GLUT_DOWN;
+}
+
+void motion(int x, int y) {
+    float wx = ((float)x - wnd_w/4) / (wnd_w/2);
+    float wy = ((float)y - wnd_h/4) / (wnd_h/2);
+
+    QPoint pt(WIDTH * wx, HEIGHT * wy);
+
+    printf("mo - - %d %d [%d %d]\n",
+            x, y, pt.x(), pt.y());
+    QMouseEvent ev(
+        QEvent::MouseMove,
+        pt, pt /* global */,
+        isdown ? Qt::LeftButton : Qt::NoButton,
+        QFlags<Qt::MouseButton>(isdown ? Qt::LeftButton : Qt::NoButton),
+        Qt::NoModifier);
+
+    page->event(&ev);
+}
+
 
 int main(int argc, char **argv) {
     app = new QApplication(argc, argv);
@@ -91,16 +138,20 @@ int main(int argc, char **argv) {
     init();
     glutReshapeFunc(reshape);
     glutDisplayFunc(draw);
+    glutMouseFunc(mouse);
+    glutMotionFunc(motion);
+    glutPassiveMotionFunc(motion);
 
     QSize size(WIDTH, HEIGHT);
-    QWebPage wp;
-    wp.setViewportSize(size);
-    EventGlue glue(&wp);
+    page = new QWebPage;
+    page->setViewportSize(size);
+    EventGlue glue(page);
 
-    wp.mainFrame()->load(QUrl("http://facebook.com"));
+    page->mainFrame()->load(QUrl("http://www.google.co.nz"));
 
     glutMainLoop();
 
+    delete page;
     delete app;
 
     return 0;
