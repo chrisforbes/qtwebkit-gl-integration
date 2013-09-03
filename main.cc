@@ -18,8 +18,13 @@ GLuint tex;
 #define WIDTH 800
 #define HEIGHT 600
 
+int wnd_w = WIDTH;
+int wnd_h = HEIGHT;
+int alloc_w = 0;
+int alloc_h = 0;
+
 void EventGlue::repaint(QRect const &dirtyRect __unused) {
-    QSize size(WIDTH, HEIGHT);
+    QSize size(wnd_w, wnd_h);
     QImage image(size, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
     QPainter painter(&image);
@@ -27,10 +32,16 @@ void EventGlue::repaint(QRect const &dirtyRect __unused) {
     this->page->mainFrame()->render(&painter);
     painter.end();
 
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_BGRA, GL_UNSIGNED_BYTE,
+    if (alloc_w != wnd_w || alloc_h != wnd_h) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wnd_w, wnd_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        alloc_w = wnd_w;
+        alloc_h = wnd_h;
+    }
+
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, wnd_w, wnd_h, GL_BGRA, GL_UNSIGNED_BYTE,
         image.bits());
 
-    printf("web repaint\n");
+    //printf("web repaint\n");
 }
 
 void EventGlue::finished(bool ok __unused) {
@@ -46,12 +57,11 @@ void init(void) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 }
 
-int wnd_w;
-int wnd_h;
-
 void reshape(int w, int h) {
     printf("reshape %dx%d\n", w, h);
     glViewport(0, 0, w, h);
+    QSize size(w, h);
+    page->setViewportSize(size);
     wnd_w = w;
     wnd_h = h;
 }
@@ -62,16 +72,16 @@ void draw(void) {
 
     glBegin(GL_QUADS);
         glTexCoord2f(0,0);
-        glVertex2f(-0.5,0.5);
+        glVertex2f(-1,1);
 
         glTexCoord2f(1,0);
-        glVertex2f(0.5,0.5);
+        glVertex2f(1,1);
 
         glTexCoord2f(1,1);
-        glVertex2f(0.5,-0.5);
+        glVertex2f(1,-1);
 
         glTexCoord2f(0,1);
-        glVertex2f(-0.5,-0.5);
+        glVertex2f(-1,-1);
     glEnd();
 
     glutSwapBuffers();
@@ -100,20 +110,10 @@ Qt::MouseButton buttons_to_qt(int buttons) {
 
 
 void mouse(int button, int state, int x, int y) {
-    // first, get the coords converted into the space
-    // expected by the browser
-
-    float wx = ((float)x - wnd_w/4) / (wnd_w/2);
-    float wy = ((float)y - wnd_h/4) / (wnd_h/2);
-
-    QPoint pt(WIDTH * wx, HEIGHT * wy);
-
-    printf("ev %d %d %d %d [%d %d]\n",
-            button, state, x, y, pt.x(), pt.y());
-
     if (button == 3 || button == 4)
         return; /* ignore wheel events */
 
+    QPoint pt(x,y);
     QMouseEvent ev(
         state == GLUT_DOWN ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease,
         pt, pt /* global */,
@@ -130,13 +130,7 @@ void mouse(int button, int state, int x, int y) {
 }
 
 void motion(int x, int y) {
-    float wx = ((float)x - wnd_w/4) / (wnd_w/2);
-    float wy = ((float)y - wnd_h/4) / (wnd_h/2);
-
-    QPoint pt(WIDTH * wx, HEIGHT * wy);
-
-    printf("mo - - %d %d [%d %d]\n",
-            x, y, pt.x(), pt.y());
+    QPoint pt(x,y);
     QMouseEvent ev(
         QEvent::MouseMove,
         pt, pt /* global */,
@@ -166,6 +160,8 @@ int main(int argc, char **argv) {
     QSize size(WIDTH, HEIGHT);
     page = new QWebPage;
     page->setViewportSize(size);
+    page->mainFrame()->setScrollBarPolicy(Qt::Vertical,Qt::ScrollBarAlwaysOff);
+    page->mainFrame()->setScrollBarPolicy(Qt::Horizontal,Qt::ScrollBarAlwaysOff);
     EventGlue glue(page);
 
     page->mainFrame()->load(QUrl("http://www.google.co.nz"));
