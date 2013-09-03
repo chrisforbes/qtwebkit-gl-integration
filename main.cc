@@ -85,7 +85,20 @@ void draw(void) {
     }
 }
 
-bool isdown = false;
+int buttons = 0;
+
+Qt::MouseButton buttons_to_qt(int buttons) {
+    int r = Qt::NoButton;
+    if (buttons & (1<<GLUT_LEFT_BUTTON))
+        r |= Qt::LeftButton;
+    if (buttons & (1<<GLUT_RIGHT_BUTTON))
+        r |= Qt::RightButton;
+    if (buttons & (1<<GLUT_MIDDLE_BUTTON))
+        r |= Qt::MiddleButton;
+    return (Qt::MouseButton) r;
+}
+
+
 void mouse(int button, int state, int x, int y) {
     // first, get the coords converted into the space
     // expected by the browser
@@ -97,15 +110,23 @@ void mouse(int button, int state, int x, int y) {
 
     printf("ev %d %d %d %d [%d %d]\n",
             button, state, x, y, pt.x(), pt.y());
+
+    if (button == 3 || button == 4)
+        return; /* ignore wheel events */
+
     QMouseEvent ev(
         state == GLUT_DOWN ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease,
         pt, pt /* global */,
-        Qt::LeftButton, QFlags<Qt::MouseButton>(Qt::LeftButton),
+        buttons_to_qt(1<<button),
+        QFlags<Qt::MouseButton>(buttons_to_qt(buttons)),
         Qt::NoModifier);
 
     page->event(&ev);
 
-    isdown = state == GLUT_DOWN;
+    if (state == GLUT_DOWN)
+        buttons |= (1<<button);
+    else
+        buttons &= ~(1<<button);
 }
 
 void motion(int x, int y) {
@@ -119,8 +140,8 @@ void motion(int x, int y) {
     QMouseEvent ev(
         QEvent::MouseMove,
         pt, pt /* global */,
-        isdown ? Qt::LeftButton : Qt::NoButton,
-        QFlags<Qt::MouseButton>(isdown ? Qt::LeftButton : Qt::NoButton),
+        Qt::NoButton,
+        QFlags<Qt::MouseButton>(buttons_to_qt(buttons)),
         Qt::NoModifier);
 
     page->event(&ev);
